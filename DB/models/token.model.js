@@ -7,7 +7,7 @@ const tokenSchema = new Schema(
     userId: { type: Types.ObjectId, ref: "User" },
     isValid: { type: Boolean, default: true },
     agent: { type: String },
-    expiredAt: { type: String },
+    expiredAt: { type: Date, expires: 0 },
   },
   { timestamps: true }
 );

@@ -144,14 +144,14 @@ export const applications = async (req, res, next) => {
   }).populate({
     path: "userId",
     select:
-      "resume.secure_url firstName lastName username email mobileNumber -_id ",
+      "firstName lastName username email mobileNumber -_id ",
   });
 
   const Applications = applications.map((application) => ({
     // by search
     user: {
-      ...application.userId.toObject(),
-      resume: application.userId.resume.secure_url,
+      ...(application.userId ? application.userId.toObject() : {}),
+      resume: application.userResumeURL?.secure_url,
     },
     userTechSkills: application.userTechSkills,
     userSoftSkills: application.userSoftSkills,

@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 
 export const objectIdValidation = (value, helper) => {
-  if (Types.ObjectId.isValid(value)) return true;
+  if (Types.ObjectId.isValid(value)) return value;
   return helper.message("Invalid object id");
 };
 

@@ -1,3 +1,5 @@
+import { open, unlink } from "node:fs/promises";
+import { Types } from "mongoose";
 import { Application } from "../../../DB/models/application.model.js";
 import { Company } from "../../../DB/models/company.model.js";
 import { Job } from "../../../DB/models/job.model.js";
@@ -176,40 +178,102 @@ export const jobsFilter = async (req, res, next) => {
 };
 
 export const uploadResume = async (req, res, next) => {
-  // check role
-  if (req.user.role !== "User")
-    return next(new Error("User only can upload CVs"));
+  let userResumeUrl;
+  let Resume;
+  let companyId;
 
-  // upload pdf
-  const userResumeUrl = await cloudinary.uploader.upload(req.file.path);
+  try {
+    // Check role and file before uploading
+    if (req.user.role !== "User")
+      return next(new Error("User only can upload CVs", { cause: 403 }));
+    if (!req.file)
+      return next(new Error("Resume PDF is required!", { cause: 400 }));
+    if (!Types.ObjectId.isValid(req.query.jobId))
+      return next(new Error("Invalid job id!", { cause: 400 }));
 
-  // Create application
-  const Resume = await Application.create({
-    jobId: req.query.jobId,
-    userId: req.user._id,
-    userTechSkills: req.body.userTechSkills,
-    userSoftSkills: req.body.userSoftSkills,
-    userResumeURL: userResumeUrl.secure_url,
-  });
+    const job = await Job.findById(req.query.jobId);
+    if (!job) return next(new Error("Job not found!", { cause: 404 }));
+    const company = await Company.findById(job.company);
+    if (!company) return next(new Error("Company not found!", { cause: 404 }));
+    companyId = company._id;
 
-  await Company.updateOne(
-    { _id: req.body.companyId },
-    { $push: { resumes: Resume._id, resumeLink: userResumeUrl.secure_url } }
-  );
+    const application = await Application.findOne({
+      jobId: job._id,
+      userId: req.user._id,
+    });
+    if (application)
+      return next(new Error("You already applied to this job!", { cause: 409 }));
 
-  // save resume in user model
-  await User.findByIdAndUpdate(req.user._id, {
-    resume: {
-      secure_url: userResumeUrl.secure_url,
-      public_id: userResumeUrl.public_id,
-    },
-  });
+    // Check the actual file header instead of trusting its MIME type
+    const file = await open(req.file.path, "r");
+    try {
+      const header = Buffer.alloc(5);
+      await file.read(header, 0, 5, 0);
+      if (header.toString() !== "%PDF-")
+        return next(new Error("Invalid PDF file!", { cause: 400 }));
+    } finally {
+      await file.close();
+    }
 
-  // send response
-  return res.json({
-    success: true,
-    msg: "Resume uploaded successfully!",
-    userResumeUrl: userResumeUrl.secure_url,
-    Resume,
-  });
+    // Upload PDF and keep the resume submitted with this application
+    userResumeUrl = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: "raw",
+    });
+    Resume = await Application.create({
+      jobId: job._id,
+      userId: req.user._id,
+      userTechSkills: req.body.userTechSkills,
+      userSoftSkills: req.body.userSoftSkills,
+      userResumeURL: { secure_url: userResumeUrl.secure_url },
+    });
+
+    const updatedCompany = await Company.updateOne(
+      { _id: companyId },
+      { $addToSet: { resumes: Resume._id } }
+    );
+    if (!updatedCompany.matchedCount)
+      throw new Error("Company not found!", { cause: 404 });
+
+    const user = await User.findByIdAndUpdate(req.user._id, {
+      resume: {
+        secure_url: userResumeUrl.secure_url,
+        public_id: userResumeUrl.public_id,
+      },
+    }, { new: true, runValidators: true });
+    if (!user) throw new Error("User not found!", { cause: 404 });
+
+    return res.json({
+      success: true,
+      msg: "Resume uploaded successfully!",
+      userResumeUrl: userResumeUrl.secure_url,
+      Resume,
+    });
+  } catch (error) {
+    // Undo the application and uploaded file if saving fails
+    try {
+      if (Resume) {
+        await Company.updateOne(
+          { _id: companyId },
+          { $pull: { resumes: Resume._id } }
+        );
+        await Application.deleteOne({ _id: Resume._id });
+      }
+      if (userResumeUrl)
+        await cloudinary.uploader.destroy(userResumeUrl.public_id, {
+          resource_type: "raw",
+        });
+    } catch (cleanupError) {
+      console.error("Resume rollback failed:", cleanupError.message);
+    }
+    return next(error);
+  } finally {
+    if (req.file) {
+      try {
+        await unlink(req.file.path);
+      } catch (error) {
+        if (error.code !== "ENOENT")
+          console.error("Temporary file cleanup failed:", error.message);
+      }
+    }
+  }
 };

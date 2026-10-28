@@ -32,10 +32,10 @@ app.use("*", (req, res, next) => {
 
 // Global error handler
 app.use((error, req, res, next) => {
-  const statusCode = error.cause || 500;
+  const statusCode = error.code === "LIMIT_FILE_SIZE" ? 413 : error.cause || 500;
   return res
     .status(statusCode)
-    .json({ success: false, msg: error.message, stack: error.stack });
+    .json({ success: false, msg: error.message });
 });
 
 app.listen(port, () => console.log(`App listening on port ${port}!`));

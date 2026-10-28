@@ -4,6 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { validation } from "../../middleware/validation.middleware.js";
 import {
   activateAccountSchema,
+  anotherUserSchema,
   forgetPasswordSchema,
   passwordSchema,
   recoverySchema,
@@ -27,6 +28,13 @@ router.get(
   "/activate/:token",
   validation(activateAccountSchema),
   asyncHandler(userController.activate)
+);
+
+// resend activation email
+router.post(
+  "/resendActivation",
+  validation(forgetPasswordSchema),
+  asyncHandler(userController.resendActivation)
 );
 
 // signin
@@ -61,7 +69,8 @@ router.get(
 // get another user account
 router.get(
   "/account/:id",
-  // isAuthenticated,
+  isAuthenticated,
+  validation(anotherUserSchema),
   asyncHandler(userController.anotherUser)
 );
 
@@ -87,6 +96,7 @@ router.patch(
 
 router.get(
   "/recoveryEmail",
+  isAuthenticated,
   validation(recoverySchema),
   asyncHandler(userController.recoveryEmail)
 );

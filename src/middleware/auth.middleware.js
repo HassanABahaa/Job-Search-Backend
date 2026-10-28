@@ -23,11 +23,22 @@ export const isAuthenticated = asyncHandler(async (req, res, next) => {
     return next(new Error("Token not found or not valid", { cause: 400 }));
 
   // verify token
-  const payload = jwt.verify(token, process.env.SECRET_KEY);
+  let payload;
+  try {
+    payload = jwt.verify(token, process.env.SECRET_KEY);
+  } catch (error) {
+    return next(new Error("Invalid or expired token!", { cause: 401 }));
+  }
+
+  if (!payload.id || !payload.exp || payload.purpose)
+    return next(new Error("Invalid session token!", { cause: 401 }));
 
   // check user
   const user = await User.findById(payload.id);
   if (!user) return next(new Error("User not found", { cause: 404 }));
+
+  if (user.isActivated !== true)
+    return next(new Error("Activate your account first!", { cause: 403 }));
 
   // pass user
   req.user = user;

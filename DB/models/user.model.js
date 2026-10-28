@@ -12,9 +12,9 @@ const userSchema = new Schema(
     mobileNumber: { type: Number, unique: true },
     role: { type: String, enum: ["User", "Company_HR"], required: true },
     status: { type: String, enum: ["online", "offline"], default: "offline" },
-    isActivated: { type: String, default: false },
+    isActivated: { type: Boolean, default: false },
     resetPasswordOTP: { type: String },
-    resetPasswordExpires: { type: String },
+    resetPasswordExpires: { type: Date },
     resume: { secure_url: String, public_id: String },
   },
   { timestamps: true }

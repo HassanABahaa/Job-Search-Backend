@@ -42,8 +42,8 @@ export const activateAccountSchema = joi
 export const signinSchema = joi.object({
   email: joi.string().email(),
   mobileNumber: joi.number(),
-  password: joi.string().pattern(new RegExp("^[a-zA-Z0-9]{3,30}$")),
-});
+  password: joi.string().pattern(new RegExp("^[a-zA-Z0-9]{3,30}$")).required(),
+}).xor("email", "mobileNumber");
 
 export const updateSchema = joi.object({
   email: joi.string().email(),
@@ -52,7 +52,7 @@ export const updateSchema = joi.object({
   DOB: joi.date(),
   lastName: joi.string(),
   firstName: joi.string(),
-});
+}).min(1);
 
 export const anotherUserSchema = joi.object({
   id: joi.string().custom(objectIdValidation).required(),
